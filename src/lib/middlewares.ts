@@ -15,6 +15,32 @@ export function hasSession(context: SessionContext): context is AuthContext {
   return context.session !== null;
 }
 
+/* ======================= Error Logging ====================== */
+
+export const errorLoggingMiddleware = createMiddleware({
+  type: "function",
+}).server(async ({ next }) => {
+  try {
+    return await next();
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "server function error",
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : String(error),
+        timestamp: new Date().toISOString(),
+      }),
+    );
+    throw error;
+  }
+});
+
 /* ======================= Infrastructure ====================== */
 
 export const dbMiddleware = createMiddleware({ type: "function" }).server(
