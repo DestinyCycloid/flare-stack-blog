@@ -188,8 +188,14 @@ function runWrangler(args: Array<string>) {
     encoding: "utf8",
   });
 
-  const stdout = result.stdout.trim();
-  const stderr = result.stderr.trim();
+  const stdout =
+    (typeof result.stdout === "string"
+      ? result.stdout
+      : result.stdout?.toString())?.trim() ?? "";
+  const stderr =
+    (typeof result.stderr === "string"
+      ? result.stderr
+      : result.stderr?.toString())?.trim() ?? "";
 
   if (stdout) {
     console.log(stdout);

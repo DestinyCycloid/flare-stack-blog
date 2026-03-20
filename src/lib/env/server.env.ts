@@ -11,11 +11,11 @@ const serverEnvSchema = z.object({
   BETTER_AUTH_URL: z.url(),
   ADMIN_EMAIL: z.email(),
   LOCALE: localeSchema.catch("zh"),
-  GITHUB_CLIENT_ID: z.string(),
-  GITHUB_CLIENT_SECRET: z.string(),
-  CLOUDFLARE_ZONE_ID: z.string(),
-  CLOUDFLARE_PURGE_API_TOKEN: z.string(),
-  DOMAIN: domainSchema,
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  CLOUDFLARE_ZONE_ID: z.string().optional(),
+  CLOUDFLARE_PURGE_API_TOKEN: z.string().optional(),
+  DOMAIN: domainSchema.optional(),
   CDN_DOMAIN: z
     .string()
     .optional()

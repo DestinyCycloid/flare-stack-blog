@@ -1,50 +1,57 @@
-import { generateKey } from "@/features/media/utils/media.utils";
+import { createStorageAdapter } from "@/features/media/adapters/storage-factory";
+import type { UploadResult } from "@/features/media/adapters/storage-adapter.interface";
 
-export async function putToR2(env: Env, image: File) {
-  const key = generateKey(image.name);
-  const contentType = image.type;
-  const url = `/images/${key}`;
-
-  await env.R2.put(key, image.stream(), {
-    httpMetadata: {
-      contentType,
-    },
-    customMetadata: {
-      originalName: image.name,
-    },
-  });
-
-  return {
-    key,
-    url,
-    fileName: image.name,
-    mimeType: contentType,
-    sizeInBytes: image.size,
-  };
-}
-
-export async function deleteFromR2(env: Env, key: string) {
-  await env.R2.delete(key);
-}
-
-export async function getFromR2(env: Env, key: string) {
-  return await env.R2.get(key);
+/**
+ * 上传图片到配置的存储后端
+ */
+export async function putToStorage(env: Env, image: File): Promise<UploadResult> {
+  const adapter = createStorageAdapter(env);
+  return await adapter.upload(image);
 }
 
 /**
- * Upload a site asset (favicon, theme images) to R2 with a fixed key.
- * No DB record; overwrites in place on re-upload.
+ * 从存储后端删除图片
+ */
+export async function deleteFromStorage(env: Env, key: string): Promise<void> {
+  const adapter = createStorageAdapter(env);
+  await adapter.delete(key);
+}
+
+/**
+ * 从存储后端获取图片
+ */
+export async function getFromStorage(env: Env, key: string): Promise<ReadableStream | null> {
+  const adapter = createStorageAdapter(env);
+  return await adapter.get(key);
+}
+
+/**
+ * 上传站点资源（favicon、主题图片等）
+ * 无数据库记录；重新上传时覆盖
  */
 export async function putSiteAsset(
   env: Env,
   file: File,
   assetPath: string,
 ): Promise<{ key: string; url: string }> {
-  const key = `asset/${assetPath}`;
-  await env.R2.put(key, file.stream(), {
-    httpMetadata: {
-      contentType: file.type,
-    },
-  });
-  return { key, url: `/images/${key}` };
+  const adapter = createStorageAdapter(env);
+  return await adapter.uploadAsset(file, assetPath);
 }
+
+// ============ 向后兼容的别名 ============
+// 保留旧的函数名以兼容现有代码
+
+/**
+ * @deprecated 使用 putToStorage 代替
+ */
+export const putToR2 = putToStorage;
+
+/**
+ * @deprecated 使用 deleteFromStorage 代替
+ */
+export const deleteFromR2 = deleteFromStorage;
+
+/**
+ * @deprecated 使用 getFromStorage 代替
+ */
+export const getFromR2 = getFromStorage;

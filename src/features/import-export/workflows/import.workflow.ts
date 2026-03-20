@@ -20,7 +20,7 @@ export class ImportWorkflow extends WorkflowEntrypoint<
   ImportWorkflowParams
 > {
   async run(event: WorkflowEvent<ImportWorkflowParams>, step: WorkflowStep) {
-    const { taskId, r2Key, mode, locale: requestedLocale } = event.payload;
+    const { taskId, tempKey, mode, locale: requestedLocale } = event.payload;
     const progressKey = IMPORT_EXPORT_CACHE_KEYS.importProgress(taskId);
     const locale = requestedLocale ?? serverEnv(this.env).LOCALE;
 
@@ -33,9 +33,9 @@ export class ImportWorkflow extends WorkflowEntrypoint<
       // NOTE: step.do() serializes return values as JSON for durability.
       // Uint8Array does NOT survive JSON round-tripping, so we must NOT
       // return binary data from steps. Instead, each step re-fetches the
-      // ZIP from R2 when it needs the binary content.
+      // ZIP from storage when it needs the binary content.
       const postEntries = await step.do("enumerate posts", async () => {
-        const zipFiles = await this.fetchZipFiles(r2Key, locale);
+        const zipFiles = await this.fetchZipFiles(tempKey, locale);
         if (mode === "native") {
           return enumerateNativePosts(zipFiles);
         }
@@ -85,7 +85,7 @@ export class ImportWorkflow extends WorkflowEntrypoint<
             };
 
             try {
-              const zipFiles = await this.fetchZipFiles(r2Key, locale);
+              const zipFiles = await this.fetchZipFiles(tempKey, locale);
               const result = await importSinglePost(
                 this.env,
                 zipFiles,
@@ -161,7 +161,9 @@ export class ImportWorkflow extends WorkflowEntrypoint<
       // 3. Cleanup and finalize
       await step.do("finalize", async () => {
         try {
-          await this.env.R2.delete(r2Key);
+          const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+          const adapter = createStorageAdapter(this.env);
+          await adapter.deleteTemp(tempKey);
         } catch {
           // Ignore cleanup errors
         }
@@ -213,15 +215,34 @@ export class ImportWorkflow extends WorkflowEntrypoint<
   }
 
   private async fetchZipFiles(
-    r2Key: string,
+    tempKey: string,
     locale: "zh" | "en",
   ): Promise<Record<string, Uint8Array>> {
-    const r2Object = await this.env.R2.get(r2Key);
-    if (!r2Object) {
+    const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+    const adapter = createStorageAdapter(this.env);
+    
+    const stream = await adapter.getTemp(tempKey);
+    if (!stream) {
       throw new Error(m.import_export_import_error_zip_missing({}, { locale }));
     }
-    const arrayBuffer = await r2Object.arrayBuffer();
-    return parseZip(new Uint8Array(arrayBuffer));
+
+    // Read stream to Uint8Array
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const zipData = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      zipData.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    return parseZip(zipData);
   }
 
   private async updateProgress(key: string, progress: TaskProgress) {

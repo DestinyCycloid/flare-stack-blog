@@ -22,13 +22,17 @@
       "remote": true
     }
   ],
-  "r2_buckets": [
-    {
-      "bucket_name": "bucket-name-placeholder",
-      "binding": "R2",
-      "remote": true
-    }
-  ],
+  // ============================================
+  // R2 存储配置（仅当 STORAGE_TYPE=r2 时需要）
+  // 如果使用 GitHub 图床（STORAGE_TYPE=github），可以注释掉此部分
+  // ============================================
+  // "r2_buckets": [
+  //   {
+  //     "bucket_name": "bucket-name-placeholder",
+  //     "binding": "R2",
+  //     "remote": true
+  //   }
+  // ],
   "kv_namespaces": [
     {
       "binding": "KV",
@@ -124,11 +128,12 @@
           "binding": "KV"
         }
       ],
-      "r2_buckets": [
-        {
-          "binding": "R2"
-        }
-      ],
+      // R2 配置（使用 GitHub 图床时可以注释掉）
+      // "r2_buckets": [
+      //   {
+      //     "binding": "R2"
+      //   }
+      // ],
       "d1_databases": [
         {
           "binding": "DB"

@@ -5,6 +5,21 @@
 # --- 环境标识 ---
 ENVIRONMENT=dev
 
+# --- 存储配置 ---
+# 图片存储类型: r2 或 github
+# github: 使用 GitHub + jsDelivr CDN（完全免费，不需要绑卡）推荐
+# r2: 使用 Cloudflare R2 存储（需要绑卡，但有 10GB 免费额度）
+STORAGE_TYPE=github
+
+# GitHub 图床配置（推荐，完全免费）
+GITHUB_IMAGE_TOKEN=your-github-personal-access-token
+GITHUB_IMAGE_REPO=username/repo-name
+# GITHUB_IMAGE_BRANCH=main
+# GITHUB_IMAGE_PATH=images/
+
+# R2 配置（可选，需要在 wrangler.jsonc 中配置 r2_buckets）
+# STORAGE_TYPE=r2
+
 # --- 认证配置（Better Auth） ---
 BETTER_AUTH_SECRET=your-secret-key-run-openssl-rand-hex-32
 BETTER_AUTH_URL=http://localhost:3000
@@ -14,10 +29,13 @@ ADMIN_EMAIL=your-email@example.com
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 
-# --- CDN 缓存清理 ---
-CLOUDFLARE_ZONE_ID=your-zone-id
-CLOUDFLARE_PURGE_API_TOKEN=your-purge-api-token
-DOMAIN=blog.example.com
+# --- CDN 缓存清理（可选） ---
+# 如果不配置，项目会跳过 CDN 缓存清理功能
+# 影响：发布/更新文章后，用户可能看到旧内容，需要等待缓存过期
+
+# CLOUDFLARE_ZONE_ID=your-zone-id
+# CLOUDFLARE_PURGE_API_TOKEN=your-purge-api-token
+# DOMAIN=blog.example.com
 # 可选：若使用独立 CDN 域名，设置后 purge 时优先使用此域名
 # CDN_DOMAIN=cdn.example.com
 

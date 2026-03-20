@@ -17,7 +17,7 @@ import {
   makeExportImageRewriter,
 } from "@/features/import-export/utils/markdown-serializer";
 import { buildZip } from "@/features/import-export/utils/zip";
-import { getFromR2 } from "@/features/media/data/media.storage";
+import { createStorageAdapter } from "@/features/media/adapters/storage-factory";
 import * as PostRepo from "@/features/posts/data/posts.data";
 import { extractAllImageKeys } from "@/features/posts/utils/content";
 import { getDb } from "@/lib/db";
@@ -116,17 +116,29 @@ export class ExportWorkflow extends WorkflowEntrypoint<
             );
           }
 
-          // Download images from R2
+          // Download images from storage
           if (post.contentJson) {
+            const adapter = createStorageAdapter(this.env);
             const imageKeys = extractAllImageKeys(post.contentJson);
             for (const key of imageKeys) {
               try {
-                const r2Object = await getFromR2(this.env, key);
-                if (r2Object) {
-                  const arrayBuffer = await r2Object.arrayBuffer();
-                  zipFiles[`${prefix}/images/${key}`] = new Uint8Array(
-                    arrayBuffer,
-                  );
+                const stream = await adapter.get(key);
+                if (stream) {
+                  const reader = stream.getReader();
+                  const chunks: Uint8Array[] = [];
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                  }
+                  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                  const result = new Uint8Array(totalLength);
+                  let offset = 0;
+                  for (const chunk of chunks) {
+                    result.set(chunk, offset);
+                    offset += chunk.length;
+                  }
+                  zipFiles[`${prefix}/images/${key}`] = result;
                 } else {
                   warnings.push(
                     m.import_export_export_warning_image_missing(
@@ -201,13 +213,21 @@ export class ExportWorkflow extends WorkflowEntrypoint<
         // Build ZIP
         const zipData = buildZip(zipFiles);
 
-        // Upload ZIP to R2
-        const r2Key = IMPORT_EXPORT_R2_KEYS.exportZip(taskId);
+        // Upload ZIP to storage using adapter
+        const tempKey = IMPORT_EXPORT_R2_KEYS.exportZip(taskId);
         try {
-          await this.env.R2.put(r2Key, zipData, {
-            httpMetadata: { contentType: "application/zip" },
-            customMetadata: { taskId },
+          const adapter = createStorageAdapter(this.env);
+          
+          // Check file size limit
+          const maxSize = adapter.getMaxFileSize();
+          if (zipData.byteLength > maxSize) {
+            throw new Error(`Export ZIP size (${zipData.byteLength} bytes) exceeds storage limit (${maxSize} bytes)`);
+          }
+
+          const zipFile = new File([zipData], `export-${taskId}.zip`, {
+            type: "application/zip",
           });
+          await adapter.uploadTemp(zipFile, tempKey);
         } catch (error) {
           await this.updateProgress(progressKey, {
             status: "failed",
@@ -236,7 +256,7 @@ export class ExportWorkflow extends WorkflowEntrypoint<
           current: "",
           errors: [],
           warnings,
-          downloadKey: r2Key,
+          downloadKey: tempKey,
         });
       });
 
@@ -248,14 +268,15 @@ export class ExportWorkflow extends WorkflowEntrypoint<
         }),
       );
 
-      // 3. Cleanup R2 after 24h
+      // 3. Cleanup storage after 24h
       const cleanupTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
       await step.sleepUntil("cleanup delay", cleanupTime);
 
       await step.do("cleanup export zip", async () => {
-        const r2Key = IMPORT_EXPORT_R2_KEYS.exportZip(taskId);
+        const tempKey = IMPORT_EXPORT_R2_KEYS.exportZip(taskId);
         try {
-          await this.env.R2.delete(r2Key);
+          const adapter = createStorageAdapter(this.env);
+          await adapter.deleteTemp(tempKey);
         } catch {
           // Ignore cleanup errors
         }

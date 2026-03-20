@@ -34,11 +34,14 @@ exportDownloadRoute.get("/download/:taskId", async (c) => {
     return c.text("Invalid task ID", 400);
   }
 
-  const r2Key = IMPORT_EXPORT_R2_KEYS.exportZip(taskId);
+  const tempKey = IMPORT_EXPORT_R2_KEYS.exportZip(taskId);
 
   try {
-    const r2Object = await c.env.R2.get(r2Key);
-    if (!r2Object) {
+    const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+    const adapter = createStorageAdapter(c.env);
+    
+    const stream = await adapter.getTemp(tempKey);
+    if (!stream) {
       return c.text("导出文件未找到或已过期", 404);
     }
 
@@ -50,7 +53,7 @@ exportDownloadRoute.get("/download/:taskId", async (c) => {
     );
     headers.set("Cache-Control", "private, no-cache");
 
-    return new Response(r2Object.body, { headers });
+    return new Response(stream, { headers });
   } catch (error) {
     console.error(
       JSON.stringify({

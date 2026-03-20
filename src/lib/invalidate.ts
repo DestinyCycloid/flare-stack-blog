@@ -9,6 +9,17 @@ export async function purgeCDNCache(env: Env, options: PurgeOptions) {
   const { CLOUDFLARE_ZONE_ID, CLOUDFLARE_PURGE_API_TOKEN, DOMAIN, CDN_DOMAIN } =
     serverEnv(env);
 
+  // 如果没有配置 CDN Purge 相关变量，跳过清理
+  if (!CLOUDFLARE_ZONE_ID || !CLOUDFLARE_PURGE_API_TOKEN || !DOMAIN) {
+    console.log(
+      JSON.stringify({
+        message: "CDN purge skipped: missing configuration",
+        note: "Set CLOUDFLARE_ZONE_ID, CLOUDFLARE_PURGE_API_TOKEN, and DOMAIN to enable CDN purge",
+      }),
+    );
+    return;
+  }
+
   if (isNotInProduction(env)) {
     console.log(
       JSON.stringify({ message: "cdn cache purge skipped in development" }),

@@ -252,7 +252,7 @@ export async function importSinglePost(
   return { title: post.title, slug: post.slug, warnings };
 }
 
-// --- Image upload (needs env for R2) ---
+// --- Image upload (needs env for storage) ---
 
 export async function uploadImages(
   env: Env,
@@ -264,6 +264,9 @@ export async function uploadImages(
   const warnings: Array<string> = [];
   const imagePrefix = `${entry.prefix}/images/`;
   const imageFiles = listFiles(zipFiles, imagePrefix);
+
+  const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+  const adapter = createStorageAdapter(env);
 
   for (const imagePath of imageFiles) {
     if (!(imagePath in zipFiles)) continue;
@@ -277,20 +280,18 @@ export async function uploadImages(
       getContentTypeFromKey(oldKey) || "application/octet-stream";
 
     try {
-      await env.R2.put(newKey, imageData, {
-        httpMetadata: { contentType: mimeType },
-        customMetadata: { originalName: oldKey },
-      });
+      const file = new File([imageData], oldKey, { type: mimeType });
+      const uploaded = await adapter.upload(file);
 
       await MediaRepo.insertMedia(getDb(env), {
-        key: newKey,
-        url: `/images/${newKey}`,
-        fileName: oldKey,
-        mimeType,
-        sizeInBytes: imageData.length,
+        key: uploaded.key,
+        url: uploaded.url,
+        fileName: uploaded.fileName,
+        mimeType: uploaded.mimeType,
+        sizeInBytes: uploaded.sizeInBytes,
       });
 
-      rewriteMap.set(oldKey, newKey);
+      rewriteMap.set(oldKey, uploaded.key);
     } catch (error) {
       console.error(
         JSON.stringify({
@@ -335,7 +336,7 @@ export function resolveRelativePath(base: string, relative: string): string {
 }
 
 /**
- * 扫描 Markdown 中的相对图片引用，上传到 R2，重写路径
+ * 扫描 Markdown 中的相对图片引用，上传到存储，重写路径
  */
 async function uploadMarkdownImages(
   env: Env,
@@ -353,6 +354,8 @@ async function uploadMarkdownImages(
     return { rewrittenMarkdown: markdown, warnings };
   }
 
+  const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+  const adapter = createStorageAdapter(env);
   const rewriteMap = new Map<string, string>();
 
   for (const img of relativeImages) {
@@ -372,25 +375,27 @@ async function uploadMarkdownImages(
     if (imageData.length === 0) continue;
 
     const fileName = resolvedPath.split("/").pop() || resolvedPath;
-    const newKey = generateKey(fileName);
     const mimeType =
       getContentTypeFromKey(fileName) || "application/octet-stream";
 
     try {
-      await env.R2.put(newKey, imageData, {
-        httpMetadata: { contentType: mimeType },
-        customMetadata: { originalName: fileName },
-      });
+      const file = new File([imageData], fileName, { type: mimeType });
+      const uploaded = await adapter.upload(file);
 
       await MediaRepo.insertMedia(getDb(env), {
-        key: newKey,
-        url: `/images/${newKey}`,
-        fileName,
-        mimeType,
-        sizeInBytes: imageData.length,
+        key: uploaded.key,
+        url: uploaded.url,
+        fileName: uploaded.fileName,
+        mimeType: uploaded.mimeType,
+        sizeInBytes: uploaded.sizeInBytes,
       });
 
-      rewriteMap.set(img.original, `/images/${newKey}?quality=80`);
+      // For R2 storage, add quality parameter; for GitHub, use direct URL
+      const imageUrl = adapter.getType() === "r2" 
+        ? `/images/${uploaded.key}?quality=80`
+        : uploaded.url;
+      
+      rewriteMap.set(img.original, imageUrl);
     } catch (error) {
       console.error(
         JSON.stringify({

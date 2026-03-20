@@ -9,11 +9,6 @@ import { useRegisterForm } from "@/features/auth/hooks";
 import { m } from "@/paraglide/messages";
 
 export const Route = createFileRoute("/_auth/register")({
-  beforeLoad: ({ context }) => {
-    if (!context.isEmailConfigured) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: RouteComponent,
   head: () => ({
     meta: [

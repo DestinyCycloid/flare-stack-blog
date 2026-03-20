@@ -17,7 +17,7 @@ export async function upload(
   input: { file: File; width?: number; height?: number },
 ) {
   const { file, width, height } = input;
-  const uploaded = await Storage.putToR2(context.env, file);
+  const uploaded = await Storage.putToStorage(context.env, file);
 
   try {
     const mediaRecord = await MediaRepo.insertMedia(context.db, {
@@ -33,16 +33,16 @@ export async function upload(
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "media db insert failed, rolling back r2 upload",
+        message: "media db insert failed, rolling back storage upload",
         key: uploaded.key,
         error: error instanceof Error ? error.message : String(error),
       }),
     );
     context.executionCtx.waitUntil(
-      Storage.deleteFromR2(context.env, uploaded.key).catch((rollbackError) =>
+      Storage.deleteFromStorage(context.env, uploaded.key).catch((rollbackError) =>
         console.error(
           JSON.stringify({
-            message: "r2 rollback delete failed",
+            message: "storage rollback delete failed",
             key: uploaded.key,
             error:
               rollbackError instanceof Error
@@ -68,10 +68,10 @@ export async function deleteImage(
 
   await MediaRepo.deleteMedia(context.db, key);
   context.executionCtx.waitUntil(
-    Storage.deleteFromR2(context.env, key).catch((deleteError) =>
+    Storage.deleteFromStorage(context.env, key).catch((deleteError) =>
       console.error(
         JSON.stringify({
-          message: "r2 delete failed",
+          message: "storage delete failed",
           key,
           error:
             deleteError instanceof Error
@@ -123,6 +123,54 @@ export async function handleImageRequest(
   key: string,
   request: Request,
 ) {
+  const { getStorageType } = await import("@/features/media/adapters/storage-factory");
+  const storageType = getStorageType(env);
+
+  // 如果使用 GitHub 图床，直接从 CDN 获取
+  if (storageType === "github") {
+    return await handleGitHubImageRequest(env, key, request);
+  }
+
+  // R2 存储的处理逻辑
+  return await handleR2ImageRequest(env, key, request);
+}
+
+/**
+ * 处理 GitHub 图床的图片请求
+ */
+async function handleGitHubImageRequest(
+  env: Env,
+  key: string,
+  request: Request,
+): Promise<Response> {
+  const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+  const adapter = createStorageAdapter(env);
+  
+  const stream = await adapter.get(key);
+  if (!stream) {
+    return new Response("Image not found", { status: 404 });
+  }
+
+  const url = new URL(request.url);
+  const searchParams = url.searchParams;
+
+  // GitHub 图床已经通过 jsDelivr CDN，直接返回
+  // 注意：Cloudflare Image Resizing 对外部 URL 的支持有限
+  const headers = new Headers();
+  headers.set("Content-Type", getContentTypeFromKey(key) || "application/octet-stream");
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  
+  return new Response(stream, { headers });
+}
+
+/**
+ * 处理 R2 存储的图片请求
+ */
+async function handleR2ImageRequest(
+  env: Env,
+  key: string,
+  request: Request,
+): Promise<Response> {
   const url = new URL(request.url);
   const searchParams = url.searchParams;
 

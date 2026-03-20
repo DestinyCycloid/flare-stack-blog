@@ -10,49 +10,43 @@ export function LoginPage({
   socialLogin,
   turnstileElement,
 }: LoginPageProps) {
+  // 强制启用邮箱登录
+  const forceEmailEnabled = true;
+  
   return (
     <div className="space-y-12">
       <header className="text-center space-y-3">
         <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground/60">
-          [ {isEmailConfigured ? m.login_label() : m.login_auth_label()} ]
+          [ {m.login_label()} ]
         </p>
         <h1 className="text-2xl font-serif font-medium tracking-tight">
-          {isEmailConfigured ? m.login_title() : m.login_auth_title()}
+          {m.login_title()}
         </h1>
-        {!isEmailConfigured && (
-          <p className="text-[10px] font-mono text-muted-foreground/40 tracking-wider">
-            {m.login_only_third_party()}
-          </p>
-        )}
       </header>
 
-      <div className={isEmailConfigured ? "space-y-10" : "space-y-0"}>
-        {isEmailConfigured && (
-          <LoginForm form={loginForm} isEmailConfigured={isEmailConfigured} />
-        )}
+      <div className="space-y-10">
+        <LoginForm form={loginForm} isEmailConfigured={forceEmailEnabled} />
 
         <SocialLogin
           isLoading={socialLogin.isLoading}
           turnstilePending={socialLogin.turnstilePending}
           handleGithubLogin={socialLogin.handleGithubLogin}
-          showDivider={isEmailConfigured}
+          showDivider={forceEmailEnabled}
         />
 
         {turnstileElement}
 
-        {isEmailConfigured && (
-          <div className="text-center pt-8">
-            <p className="text-[10px] font-mono text-muted-foreground/50 tracking-wider">
-              {m.login_no_account()}{" "}
-              <Link
-                to="/register"
-                className="text-foreground hover:opacity-70 transition-opacity ml-1"
-              >
-                [ {m.login_register_now()} ]
-              </Link>
-            </p>
-          </div>
-        )}
+        <div className="text-center pt-8">
+          <p className="text-[10px] font-mono text-muted-foreground/50 tracking-wider">
+            {m.login_no_account()}{" "}
+            <Link
+              to="/register"
+              className="text-foreground hover:opacity-70 transition-opacity ml-1"
+            >
+              [ {m.login_register_now()} ]
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

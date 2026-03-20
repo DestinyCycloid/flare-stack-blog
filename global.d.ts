@@ -37,7 +37,7 @@ declare global {
 
   interface ImportWorkflowParams {
     taskId: string;
-    r2Key: string;
+    tempKey: string;
     mode: "native" | "markdown";
     locale?: "zh" | "en";
   }
@@ -50,6 +50,15 @@ declare global {
     EXPORT_WORKFLOW: Workflow<ExportWorkflowParams>;
     IMPORT_WORKFLOW: Workflow<ImportWorkflowParams>;
     QUEUE: Queue<QueueMessage>;
+    
+    // Storage configuration
+    STORAGE_TYPE?: "r2" | "github";
+    
+    // GitHub storage configuration (optional, required when STORAGE_TYPE=github)
+    GITHUB_IMAGE_TOKEN?: string;
+    GITHUB_IMAGE_REPO?: string;
+    GITHUB_IMAGE_BRANCH?: string;
+    GITHUB_IMAGE_PATH?: string;
   }
 
   type DB = DBType;

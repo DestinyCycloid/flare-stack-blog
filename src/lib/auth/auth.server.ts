@@ -52,15 +52,17 @@ export function getAuth({ db, env }: { db: DB; env: Env }) {
 
   return betterAuth({
     ...authConfig,
-    socialProviders: {
-      github: {
-        clientId: GITHUB_CLIENT_ID,
-        clientSecret: GITHUB_CLIENT_SECRET,
-      },
-    },
+    socialProviders: GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET
+      ? {
+          github: {
+            clientId: GITHUB_CLIENT_ID,
+            clientSecret: GITHUB_CLIENT_SECRET,
+          },
+        }
+      : {},
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true,
+      requireEmailVerification: false, // 禁用邮箱验证，允许直接注册登录
       password: {
         hash: (password: string) => getPasswordHasher().hash(password),
         verify: (params: { hash: string; password: string }) =>

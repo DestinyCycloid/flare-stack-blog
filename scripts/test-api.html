@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试邮件配置 API</title>
+</head>
+<body>
+    <h1>测试邮件配置</h1>
+    <button onclick="testAPI()">测试 API</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.textContent = '正在测试...\n';
+            
+            try {
+                // 测试多个可能的路径
+                const paths = [
+                    '/_server/getIsEmailConfiguredFn',
+                    '/api/_server/getIsEmailConfiguredFn',
+                    '/_server',
+                ];
+                
+                for (const path of paths) {
+                    const url = `https://dcycloid.us.ci${path}`;
+                    result.textContent += `\n测试: ${url}\n`;
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({})
+                    });
+                    
+                    result.textContent += `状态: ${response.status}\n`;
+                    const text = await response.text();
+                    result.textContent += `响应: ${text}\n`;
+                }
+                
+                // 直接访问登录页面，查看网络请求
+                result.textContent += '\n\n请打开浏览器开发者工具，访问 https://dcycloid.us.ci/login\n';
+                result.textContent += '查看 Network 标签，找到 getIsEmailConfiguredFn 的请求\n';
+                
+            } catch (error) {
+                result.textContent += `\n错误: ${error.message}\n`;
+            }
+        }
+    </script>
+</body>
+</html>

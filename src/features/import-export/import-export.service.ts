@@ -77,10 +77,10 @@ export async function startImport(context: BaseContext, files: Array<File>) {
   }
 
   const taskId = crypto.randomUUID();
-  const r2Key = IMPORT_EXPORT_R2_KEYS.importZip(taskId);
+  const tempKey = IMPORT_EXPORT_R2_KEYS.importZip(taskId);
   const locale = getRequestLocaleOrDefault(context.env);
 
-  // 1. Build ZIP data + detect mode (before uploading to R2)
+  // 1. Build ZIP data + detect mode (before uploading to storage)
   let zipData: Uint8Array;
   let mode: "native" | "markdown";
 
@@ -123,16 +123,27 @@ export async function startImport(context: BaseContext, files: Array<File>) {
     return err({ reason: "UPLOAD_FAILED" });
   }
 
-  // 2. Upload to R2
+  // 2. Upload to storage using adapter
   try {
-    await context.env.R2.put(r2Key, zipData, {
-      httpMetadata: { contentType: "application/zip" },
-      customMetadata: { taskId },
+    const { createStorageAdapter } = await import("@/features/media/adapters/storage-factory");
+    const adapter = createStorageAdapter(context.env);
+    
+    // Check file size limit
+    const maxSize = adapter.getMaxFileSize();
+    if (zipData.byteLength > maxSize) {
+      return err({ reason: "FILE_TOO_LARGE" });
+    }
+
+    // Create a File object from the zip data
+    const zipFile = new File([zipData], `import-${taskId}.zip`, {
+      type: "application/zip",
     });
+
+    await adapter.uploadTemp(zipFile, tempKey);
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "import upload to R2 failed",
+        message: "import upload to storage failed",
         error: error instanceof Error ? error.message : String(error),
       }),
     );
@@ -158,7 +169,7 @@ export async function startImport(context: BaseContext, files: Array<File>) {
 
   try {
     await context.env.IMPORT_WORKFLOW.create({
-      params: { taskId, r2Key, mode, locale },
+      params: { taskId, tempKey, mode, locale },
     });
   } catch (error) {
     console.error(
